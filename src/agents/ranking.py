@@ -7,10 +7,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from graph.state import State
+from graph.state import AgentState
 
 
-async def ranking_node(state: State) -> dict[str, Any]:
+async def ranking_node(state: AgentState) -> dict[str, Any]:
     """
     TODO: Implement the logic for ranking here
     """

@@ -7,10 +7,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from graph.state import State
+from graph.state import AgentState
 
 
-async def margin_analysis_node(state: State) -> dict[str, Any]:
+async def margin_analysis_node(state: AgentState) -> dict[str, Any]:
     """
     TODO: Implement the logic for margin analysis here
     """

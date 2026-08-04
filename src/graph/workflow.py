@@ -4,15 +4,15 @@ from __future__ import annotations
 
 from langgraph.graph import END, START, StateGraph
 
-from graph.state import AgentState
-from agents.market_mapping import market_mapping_node
 from agents.company_ingestion import company_ingestion_node
-from agents.moat_analysis import moat_analysis_node
-from agents.margin_analysis import margin_analysis_node
 from agents.growth_forecast import growth_forecast_node
-from agents.risk_adjustment import risk_adjustment_node
+from agents.margin_analysis import margin_analysis_node
+from agents.market_mapping import market_mapping_node
+from agents.moat_analysis import moat_analysis_node
 from agents.ranking import ranking_node
 from agents.report import report_node
+from agents.risk_adjustment import risk_adjustment_node
+from graph.state import AgentState
 
 
 def build_graph():
