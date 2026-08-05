@@ -4,7 +4,8 @@
     "."
   ],
   "graphs": {
-    "chat": "./growth_engine/graph.py:graph"
+    "chat": "./src/graph/workflow.py:graph"
   },
+  "env": ".env",
   "image_distro": "wolfi"
 }

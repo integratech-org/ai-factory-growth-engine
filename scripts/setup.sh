@@ -133,7 +133,7 @@ show_summary() {
 # ===========================================
 
 main() {
-  print_header "bloca-ml - Setup"
+  print_header "ai-factory-growth-engine - Setup"
 
   check_requirements
   setup_pre_commit
