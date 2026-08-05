@@ -15,7 +15,7 @@ from agents.risk_adjustment import risk_adjustment_node
 from graph.state import AgentState
 
 
-def build_graph():
+def build_graph(checkpointer=None, interrupt_before: list | None = None):
     builder = StateGraph(AgentState)
 
     # ── Register all nodes ────────────────────────────────────────────
@@ -39,7 +39,11 @@ def build_graph():
     builder.add_edge("ranking", "report")
     builder.add_edge("report", END)
 
-    return builder.compile(name="AI Factory Growth Engine")
+    return builder.compile(
+        checkpointer=checkpointer,
+        interrupt_before=interrupt_before or [],
+        name="AI Factory Growth Engine",
+    )
 
 
 graph = build_graph()
