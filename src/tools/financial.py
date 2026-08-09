@@ -3,6 +3,11 @@ yfinance wrapper for market/financial data.
 Used by: Company Ingestion, Margin Analysis (primary), Growth Forecast agents.
 """
 
+from __future__ import annotations
+
+import yfinance as yf
+
+
 # TODO: def get_operating_margin(ticker: str) -> float
 #   - pull from yfinance, wrap sync call in asyncio.to_thread()
 # TODO: def get_3yr_revenue_cagr(ticker: str) -> float
