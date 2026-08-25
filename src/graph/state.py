@@ -3,6 +3,15 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Literal
 
+# ─────────────────────────────────────────────────────────────────────
+# Shared segment type
+#
+# Single source of truth for the 5 AI Factory value-chain segments.
+# Defined here (not in market_mapping.py) since this is the lowest-level
+# module every agent already imports from — avoids circular imports.
+# ─────────────────────────────────────────────────────────────────────
+AIFactorySegment = Literal["compute", "networking", "power", "cooling", "construction"]
+
 
 # ─────────────────────────────────────────────────────────────────────
 # Nested data structures
@@ -22,10 +31,8 @@ class CompanyState:
     company_name: str
 
     # ── Market Mapping Agent / Company Ingestion Agent ────────────────
-    ai_factory_segment: (
-        Literal["compute", "networking", "power", "cooling", "construction"] | None
-    ) = None
-    all_segments: list[str] = field(default_factory=list)
+    ai_factory_segment: AIFactorySegment | None = None
+    all_segments: list[AIFactorySegment] = field(default_factory=list)
     revenue_exposure_pct: float | None = None
 
     # ── Moat Analysis Agent ───────────────────────────────────────────
@@ -86,7 +93,7 @@ class CompanyState:
 class AgentState:
     # ── Market Mapping output ────────────────────────────────────────
     # AI Factory value-chain framework (segment -> weight/description).
-    segment_framework: dict = field(default_factory=dict)
+    segment_framework: dict[AIFactorySegment, dict] = field(default_factory=dict)
 
     # ── Company roster ────────────────────────────────────────────────
     # Populated by Company Ingestion, enriched by every agent after that.
@@ -164,4 +171,3 @@ def get_companies(state: dict | AgentState) -> list[CompanyState]:
     return [
         c if isinstance(c, CompanyState) else CompanyState.from_dict(c) for c in raw
     ]
-
