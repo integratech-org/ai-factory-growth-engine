@@ -40,6 +40,9 @@ class CompanyState:
     growth_cagr_3yr: float | None = None
 
     # ── Risk Adjustment Agent ─────────────────────────────────────────
+    customer_concentration_pct: float | None = None
+    cyclicality_tag: str | None = None
+    execution_flags: list[str] = field(default_factory=list)
     risk_discount: float | None = None
     risk_notes: str | None = None
 
@@ -71,6 +74,9 @@ class CompanyState:
             operating_margin=data.get("operating_margin"),
             margin_score=data.get("margin_score"),
             growth_cagr_3yr=data.get("growth_cagr_3yr"),
+            customer_concentration_pct=data.get("customer_concentration_pct"),
+            cyclicality_tag=data.get("cyclicality_tag"),
+            execution_flags=data.get("execution_flags", []),
             risk_discount=data.get("risk_discount"),
             risk_notes=data.get("risk_notes"),
             tafgs_score=data.get("tafgs_score"),
