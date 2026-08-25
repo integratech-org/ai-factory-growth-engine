@@ -14,3 +14,4 @@ async def margin_analysis_node(state: AgentState) -> dict[str, Any]:
     """
     TODO: Implement the logic for margin analysis here
     """
+    return {}

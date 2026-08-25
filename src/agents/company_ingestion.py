@@ -14,3 +14,4 @@ async def company_ingestion_node(state: AgentState) -> dict[str, Any]:
     """
     TODO: Implement the logic for company ingestion here
     """
+    return {}

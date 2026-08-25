@@ -14,3 +14,4 @@ async def risk_adjustment_node(state: AgentState) -> dict[str, Any]:
     """
     TODO: Implement the logic for risk adjustment here
     """
+    return {}

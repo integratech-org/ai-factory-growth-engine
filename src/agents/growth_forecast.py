@@ -14,3 +14,4 @@ async def growth_forecast_node(state: AgentState) -> dict[str, Any]:
     """
     TODO: Implement the logic for growth forecasting here
     """
+    return {}
