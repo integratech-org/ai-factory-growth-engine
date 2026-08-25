@@ -14,3 +14,4 @@ async def report_node(state: AgentState) -> dict[str, Any]:
     """
     TODO: Implement the logic for report generation here
     """
+    return {}
