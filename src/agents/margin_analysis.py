@@ -1,6 +1,4 @@
 """
-Margin Analysis Agent — normalizes operating margin strength
-into a 0-5 score based on pricing power and operating leverage.
 src/agents/margin_analysis.py
 
 The Margin Analysis agent.
