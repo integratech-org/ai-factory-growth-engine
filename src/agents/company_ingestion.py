@@ -45,7 +45,7 @@ from tools.search import tavily_search
 # across multiple segments, so inference speed matters more than deep
 # reasoning quality.
 # ─────────────────────────────────────────────────────────────────────────────
-MODEL_NAME = os.getenv("GROQ_MODEL_NAME", "llama-3.3-70b-versatile")
+MODEL_NAME = os.getenv("GROQ_MODEL_NAME", "openai/gpt-oss-120b")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -69,7 +69,6 @@ EXTRACTION_PROMPT = ChatPromptTemplate.from_template(
     verifiable companies as the search results actually support — target
     10-15+ per segment if the results contain that many, including mid-cap
     and smaller/niche players alongside large-cap leaders.
-
     Rules:
     1. Only include companies that are PUBLICLY TRADED with a real stock
        ticker you can identify from the search results or your own
@@ -284,7 +283,7 @@ async def company_ingestion_node(state: AgentState) -> dict[str, Any]:
 
             raw_results = []
             for q in queries:
-                r = await asyncio.to_thread(tavily_search, q, max_results=10)
+                r = await asyncio.to_thread(tavily_search, q, max_results=3)
                 raw_results.extend(r)
 
             # Dedupe search results by URL before feeding to the LLM —
@@ -316,9 +315,10 @@ async def company_ingestion_node(state: AgentState) -> dict[str, Any]:
                 ),
             )
 
-            verified = await asyncio.gather(
-                *[verify_candidate(c, segment_key) for c in extracted.companies]
-            )
+            verified = []
+            for c in extracted.companies:
+                verified.append(await verify_candidate(c, segment_key))
+
             found = [c for c in verified if c is not None]
             all_companies.extend(found)
 
