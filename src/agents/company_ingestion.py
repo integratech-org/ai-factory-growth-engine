@@ -1,388 +1,348 @@
 """
-Company Ingestion Agent — identifies eligible public companies globally
-with exposure to AI Factory infrastructure build-outs.
+src/agents/company_ingestion.py
+
+The Company Ingestion agent.
+
+Responsibility: given the AI Factory segment framework (from Market
+Mapping), search for and verify public companies with revenue exposure
+to each segment, producing a deduplicated list of CompanyState records.
+
+This agent demonstrates the search + extract + verify + dedupe pattern:
+  read segments from state → search per segment (multiple query angles)
+  → LLM extracts structured candidates → verify each ticker against
+  yfinance → dedupe across segments → return populated company list
 """
 
 from __future__ import annotations
 
 import asyncio
-import re
-from typing import Any, Literal
+import os
+from typing import Any, cast
 
-from graph.state import AgentState, CompanyState
-from tools.financial import get_company_profile_async
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_groq import ChatGroq
+from pydantic import BaseModel, Field
+
+from graph.state import AgentState, AIFactorySegment, CompanyState
+from tools.financial import get_company_profile
 from tools.search import tavily_search
 
+# TODO: revenue_exposure_pct is always null for now — not yet implemented.
+# Tried two ways to get this number, both failed:
+#   1. SEC EDGAR (10-K filings) — too slow (~5 min) and almost never found
+#      the number, because the exact % is usually buried deep in the filing,
+#      not near the top where we were looking.
+#   2. Tavily search snippets — fast, but news articles rarely state the
+#      exact % either, so this also came back empty most of the time.
+# Plan: revisit this after all 8 agents are done. Probably need to fetch
+# the FULL 10-K and search for the specific section (segment revenue
+# breakdown) instead of just grabbing the first few pages.
 
-# ─────────────────────────────────────────────────────────────────────
-# Types
-# ─────────────────────────────────────────────────────────────────────
-
-Segment = Literal[
-    "compute",
-    "networking",
-    "power",
-    "cooling",
-    "construction",
-]
-
-
-# ─────────────────────────────────────────────────────────────────────
-# Global public-company seed universe
-# ─────────────────────────────────────────────────────────────────────
-
-COMPANY_UNIVERSE: dict[str, tuple[str, Segment]] = {
-    # Compute
-    "NVDA": ("NVIDIA", "compute"),
-    "AMD": ("Advanced Micro Devices", "compute"),
-    "AVGO": ("Broadcom", "compute"),
-    "ARM": ("Arm Holdings", "compute"),
-    "TSM": ("Taiwan Semiconductor Manufacturing Company", "compute"),
-    "MU": ("Micron Technology", "compute"),
-    "005930.KS": ("Samsung Electronics", "compute"),
-    "000660.KS": ("SK hynix", "compute"),
-    "INTC": ("Intel", "compute"),
-    # Networking
-    "ANET": ("Arista Networks", "networking"),
-    "CSCO": ("Cisco Systems", "networking"),
-    "MRVL": ("Marvell Technology", "networking"),
-    "LITE": ("Lumentum", "networking"),
-    "COHR": ("Coherent", "networking"),
-    "CIEN": ("Ciena", "networking"),
-    "NOK": ("Nokia", "networking"),
-    "ERIC": ("Ericsson", "networking"),
-    # Power
-    "VRT": ("Vertiv", "power"),
-    "ETN": ("Eaton", "power"),
-    "GEV": ("GE Vernova", "power"),
-    "PWR": ("Quanta Services", "power"),
-    "SU.PA": ("Schneider Electric", "power"),
-    "ABB": ("ABB", "power"),
-    "SIEMENS.DE": ("Siemens", "power"),
-    "HUBB": ("Hubbell", "power"),
-    # Cooling
-    "CARR": ("Carrier Global", "cooling"),
-    "TT": ("Trane Technologies", "cooling"),
-    "JCI": ("Johnson Controls", "cooling"),
-    "XYL": ("Xylem", "cooling"),
-    "NIBE-B.ST": ("NIBE Industrier", "cooling"),
-    # Construction / Data-center infrastructure
-    "EQIX": ("Equinix", "construction"),
-    "DLR": ("Digital Realty", "construction"),
-    "V": ("Vinci", "construction"),
-    "ACM": ("AECOM", "construction"),
-    "J": ("Jacobs Solutions", "construction"),
-    "EME": ("EMCOR Group", "construction"),
-    "FLR": ("Fluor", "construction"),
-}
+# ─────────────────────────────────────────────────────────────────────────────
+# Model configuration
+#
+# Groq chosen over Gemini here: this is a high-volume screening task
+# across multiple segments, so inference speed matters more than deep
+# reasoning quality.
+# ─────────────────────────────────────────────────────────────────────────────
+MODEL_NAME = os.getenv("GROQ_MODEL_NAME", "llama-3.3-70b-versatile")
 
 
-# ─────────────────────────────────────────────────────────────────────
-# AI Factory evidence keywords
-# ─────────────────────────────────────────────────────────────────────
-
-SEGMENT_TERMS: dict[Segment, tuple[str, ...]] = {
-    "compute": (
-        "gpu",
-        "accelerator",
-        "ai server",
-        "data center server",
-        "hbm",
-        "ai compute",
-    ),
-    "networking": (
-        "ai networking",
-        "ethernet",
-        "infiniband",
-        "optical",
-        "data center network",
-    ),
-    "power": (
-        "data center power",
-        "switchgear",
-        "ups",
-        "generator",
-        "grid",
-        "ai data center power",
-    ),
-    "cooling": (
-        "liquid cooling",
-        "data center cooling",
-        "chiller",
-        "thermal management",
-        "crac",
-        "crah",
-    ),
-    "construction": (
-        "data center construction",
-        "hyperscale",
-        "data center build",
-        "data center campus",
-        "commissioning",
-    ),
-}
-
-
-# ─────────────────────────────────────────────────────────────────────
-# Helper functions
-# ─────────────────────────────────────────────────────────────────────
-
-
-def _evidence_score(
-    text: str,
-    segment: Segment,
-) -> int:
-    """Count segment-specific AI Factory terms in search evidence."""
-
-    normalized = text.lower()
-
-    return sum(1 for term in SEGMENT_TERMS[segment] if term in normalized)
-
-
-def _extract_exposure_pct(
-    text: str,
-) -> float | None:
+# ─────────────────────────────────────────────────────────────────────────────
+# Extraction prompt
+#
+# Single-shot extraction, not a conversation. Key decisions:
+#   1. Explicitly require a stock ticker — filters out private companies
+#      at the LLM reasoning stage, before we even hit yfinance
+#   2. Segment description passed in for grounding, not just the key
+#   3. Target 10-15+ per segment since multiple query angles feed more
+#      search results into this prompt
+# ─────────────────────────────────────────────────────────────────────────────
+EXTRACTION_PROMPT = ChatPromptTemplate.from_template(
     """
-    Extract an explicitly stated revenue/exposure percentage.
+    You are screening public companies for the "{segment}" segment of AI
+    Factory / data center infrastructure ({description}).
 
-    This does not estimate exposure. If no explicit percentage
-    is found, None is returned.
+    From the search results below, extract EVERY public company mentioned
+    that has direct revenue exposure to this segment — not just the one or
+    two most obvious market leaders. Aim to identify as many distinct,
+    verifiable companies as the search results actually support — target
+    10-15+ per segment if the results contain that many, including mid-cap
+    and smaller/niche players alongside large-cap leaders.
+
+    Rules:
+    1. Only include companies that are PUBLICLY TRADED with a real stock
+       ticker you can identify from the search results or your own
+       knowledge (e.g. NVDA, VRT, ETN). Exclude private companies,
+       subsidiaries without their own ticker, and startups.
+    2. If you are not confident a company has a valid, real ticker, DO NOT
+       include it — do not guess, and never use placeholder values like
+       "NONE", "N/A", "UNKNOWN", or "TBD".
+    3. Do not list the same company twice under different name variants.
+    4. Do not invent companies that are not supported by the search
+       results — only extract what is actually mentioned or clearly
+       implied there.
+    5. Prefer primary US-listed tickers when a company trades on multiple
+       exchanges.
+
+    Search results:
+    {search_results}
     """
+)
 
-    patterns = (
-        r"(?:approximately|about|roughly|around|over|more than)?\s*"
-        r"(\d+(?:\.\d+)?)\s*%\s*(?:of|revenue|sales)",
-        r"(\d+(?:\.\d+)?)\s*%\s*"
-        r"(?:revenue|sales).*?"
-        r"(?:data center|ai)",
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Structured output schema
+#
+# Local to this agent — NOT part of AgentState/CompanyState. Used only
+# to constrain LLM output via .with_structured_output().
+# ─────────────────────────────────────────────────────────────────────────────
+class CompanyCandidate(BaseModel):
+    ticker: str = Field(description="Stock ticker symbol, e.g. NVDA")
+    company_name: str = Field(description="Full company name")
+
+
+class CompanyCandidateList(BaseModel):
+    companies: list[CompanyCandidate] = Field(
+        description="List of public companies found relevant to this segment"
     )
 
-    for pattern in patterns:
-        match = re.search(
-            pattern,
-            text,
-            flags=re.IGNORECASE,
-        )
 
-        if match is None:
-            continue
+# ─────────────────────────────────────────────────────────────────────────────
+# LLM factory
+#
+# New instance per call rather than a module-level singleton — avoids
+# subtle state issues in long-running processes, easier to test with
+# different configurations.
+# ─────────────────────────────────────────────────────────────────────────────
+def build_ingestion_llm() -> ChatGroq:
+    """
+    Create the Groq LLM client for Company Ingestion.
 
-        try:
-            value = float(match.group(1))
-        except TypeError, ValueError:
-            continue
-
-        if 0 <= value <= 100:
-            return value
-
-    return None
-
-
-# ─────────────────────────────────────────────────────────────────────
-# Company validation
-# ─────────────────────────────────────────────────────────────────────
+    temperature=0.2, low temperature for structured extraction tasks —
+    we're extracting company names/tickers from search results, which
+    needs consistency, not creativity. Higher temperature risks the LLM
+    inventing plausible-sounding but incorrect ticker symbols.
+    """
+    return ChatGroq(model=MODEL_NAME, temperature=0.2)
 
 
-async def _validate_company(
-    ticker: str,
-    name: str,
-    segment: Segment,
+# ─────────────────────────────────────────────────────────────────────────────
+# Verification helper
+#
+# Separated from the node function so it can be tested independently
+# without running the full segment loop.
+# ─────────────────────────────────────────────────────────────────────────────
+async def verify_candidate(
+    candidate: CompanyCandidate, segment_key: AIFactorySegment
 ) -> CompanyState | None:
     """
-    Validate one candidate company.
+    Verify a single LLM-extracted candidate against yfinance.
 
-    The company must:
-    1. Have a valid public-company profile.
-    2. Have search evidence connecting it to the selected
-       AI Factory infrastructure segment.
+    Args:
+        candidate:   The LLM's extracted ticker + company name.
+        segment_key: Which AI Factory segment this candidate was found under.
+
+    Returns:
+        A populated CompanyState if the ticker is a real public company,
+        None if the ticker is invalid/unverifiable (LLM hallucination).
     """
-
-    # Get company profile through the async wrapper.
-    profile = await get_company_profile_async(ticker)
-
-    if not profile:
+    # Guard against LLM hallucinated placeholder tickers
+    if not candidate.ticker or candidate.ticker.strip().upper() in {
+        "NONE",
+        "N/A",
+        "UNKNOWN",
+        "",
+    }:
         return None
 
-    company_name = profile.get("longName") or profile.get("shortName") or name
-
-    # Search for AI Factory exposure.
-    queries = (
-        f'"{company_name}" AI data center {segment}',
-        f'"{company_name}" AI factory infrastructure {segment}',
-    )
-
-    results: list[dict[str, Any]] = []
-
-    for query in queries:
-        search_results = await asyncio.to_thread(
-            tavily_search,
-            query,
-            5,
-        )
-
-        results.extend(search_results)
-
-    # Combine search evidence.
-    evidence_text = " ".join(
-        f"{result.get('title', '')} {result.get('content', '')}" for result in results
-    )
-
-    # Require at least one relevant segment-specific term.
-    if (
-        _evidence_score(
-            evidence_text,
-            segment,
-        )
-        == 0
-    ):
+    info = await asyncio.to_thread(get_company_profile, candidate.ticker)
+    if info is None:
         return None
-
-    exposure = _extract_exposure_pct(evidence_text)
 
     return CompanyState(
-        ticker=ticker,
-        company_name=company_name,
-        ai_factory_segment=segment,
-        all_segments=[segment],
-        revenue_exposure_pct=exposure,
+        ticker=info["ticker"],
+        company_name=info["company_name"],
+        ai_factory_segment=segment_key,
     )
 
 
-# ─────────────────────────────────────────────────────────────────────
-# Safe wrapper
-# ─────────────────────────────────────────────────────────────────────
-
-
-async def _safe_validate_company(
-    ticker: str,
-    name: str,
-    segment: Segment,
-) -> tuple[CompanyState | None, str | None]:
+# ─────────────────────────────────────────────────────────────────────────────
+# Dedup helper
+#
+# A company can legitimately appear under multiple segments (e.g.
+# Vertiv makes both power infrastructure AND cooling systems). Per the
+# project scope ("Primary AI Factory role", one score set "for each
+# company", distinct companies in the Top 20), we merge these into one
+# record per ticker rather than keeping duplicate entries. Primary
+# segment = the one with the highest weight_pct, since that's where
+# the company's AI Factory exposure is most concentrated by dollar share.
+# ─────────────────────────────────────────────────────────────────────────────
+def dedupe_companies(
+    companies: list[CompanyState],
+    segment_framework: dict[AIFactorySegment, dict],
+) -> list[CompanyState]:
     """
-    Validate a company without allowing one failure to break
-    the entire asyncio.gather() operation.
+    Merge duplicate tickers (found under multiple segments) into single
+    records, tracking all matched segments while keeping one as primary.
 
-    Returning a tuple instead of using return_exceptions=True
-    prevents Pylance from producing CompanyState | BaseException
-    type errors.
+    Args:
+        companies:         Raw list, may contain duplicate tickers across segments.
+        segment_framework: segment -> {weight_pct, description}, used to
+                            decide which segment is "primary" when a
+                            company spans multiple.
+
+    Returns:
+        Deduplicated list, one CompanyState per unique ticker.
     """
+    merged: dict[str, CompanyState] = {}
 
-    try:
-        company = await _validate_company(
-            ticker,
-            name,
-            segment,
+    for company in companies:
+        ticker = company.ticker
+
+        if ticker not in merged:
+            # First time seeing this ticker — start tracking it
+            if company.ai_factory_segment is not None:
+                company.all_segments = [company.ai_factory_segment]
+            merged[ticker] = company
+            continue
+
+        # Already seen this ticker under a different segment — merge
+        existing = merged[ticker]
+        new_segment = company.ai_factory_segment
+
+        if new_segment is not None and new_segment not in existing.all_segments:
+            existing.all_segments.append(new_segment)
+
+        # Re-decide primary segment: whichever has the highest weight_pct
+        existing_weight = (
+            segment_framework.get(existing.ai_factory_segment, {}).get("weight_pct", 0)
+            if existing.ai_factory_segment is not None
+            else 0
+        )
+        new_weight = (
+            segment_framework.get(new_segment, {}).get("weight_pct", 0)
+            if new_segment is not None
+            else 0
         )
 
-        return company, None
+        if new_weight > existing_weight:
+            existing.ai_factory_segment = new_segment
 
-    except Exception as exc:
-        return None, f"{ticker}: {exc}"
-
-
-# ─────────────────────────────────────────────────────────────────────
-# LangGraph node
-# ─────────────────────────────────────────────────────────────────────
+    return list(merged.values())
 
 
-async def company_ingestion_node(
-    state: AgentState,
-) -> dict[str, Any]:
+# ─────────────────────────────────────────────────────────────────────────────
+# The LangGraph node
+# ─────────────────────────────────────────────────────────────────────────────
+async def company_ingestion_node(state: AgentState) -> dict[str, Any]:
     """
-    LangGraph node: Company Ingestion.
+    LangGraph node: Company Ingestion
 
     Reads:
-        state.segment_framework
+        state.segment_framework: segment -> {weight_pct, description},
+                                  set by Market Mapping
 
     Writes:
-        state.companies
-        state.current_step
-        state.error
+        state.companies:    deduplicated list of verified CompanyState records
+        state.current_step: "company_ingestion_complete"
+        state.error:        semicolon-joined per-segment errors, or None
+
+    Flow:
+        1. For each segment in segment_framework:
+           a. Run 3 varied Tavily search queries for broader coverage
+           b. Dedupe search results by URL before feeding to the LLM
+           c. LLM extracts structured {ticker, company_name} list
+           d. Verify each candidate against yfinance
+        2. Collect all verified companies across segments
+        3. Dedupe by ticker (a company can span multiple segments)
+        4. Return partial state update
     """
+    if not state.segment_framework:
+        return {"error": "No segment_framework found. Run Market Mapping first."}
 
-    framework = (
-        state.get("segment_framework", {})
-        if isinstance(state, dict)
-        else state.segment_framework
-    ) or {}
+    print("\n[Company Ingestion] Starting company search across segments...")
 
-    # Keep the type as Segment rather than generic str.
-    segments: list[Segment] = [
-        segment for segment in SEGMENT_TERMS if segment in framework
-    ]
+    llm = build_ingestion_llm()
+    structured_llm = llm.with_structured_output(CompanyCandidateList)
+    chain = EXTRACTION_PROMPT | structured_llm
 
-    # Fallback when Market Mapping has not populated the framework.
-    if not segments:
-        segments = list(SEGMENT_TERMS.keys())
+    all_companies: list[CompanyState] = []
+    errors: list[str] = []
+
+    for segment_key, segment_info in state.segment_framework.items():
+        print(f"[Company Ingestion] Searching segment: {segment_key}...")
+        try:
+            # Multiple query angles per segment for broader coverage —
+            # a single query often isn't enough to surface 10-15+
+            # distinct companies, especially for niche segments.
+            queries = [
+                f"public companies {segment_info['description']} AI data center",
+                f"top {segment_key} companies stocks AI infrastructure",
+                f"{segment_info['description']} market leaders publicly traded",
+            ]
+
+            raw_results = []
+            for q in queries:
+                r = await asyncio.to_thread(tavily_search, q, max_results=10)
+                raw_results.extend(r)
+
+            # Dedupe search results by URL before feeding to the LLM —
+            # avoids the same article/page appearing multiple times and
+            # skewing the extraction toward whatever it repeats most.
+            seen_urls = set()
+            results = []
+            for r in raw_results:
+                if r["url"] not in seen_urls:
+                    seen_urls.add(r["url"])
+                    results.append(r)
+
+            if not results:
+                print(f"[Company Ingestion] {segment_key}: no search results, skipping")
+                continue
+
+            results_text = "\n".join(
+                f"- {r['title']} ({r['content'][:300]})" for r in results
+            )
+
+            extracted = cast(
+                CompanyCandidateList,
+                await chain.ainvoke(
+                    {
+                        "segment": segment_key,
+                        "description": segment_info["description"],
+                        "search_results": results_text,
+                    }
+                ),
+            )
+
+            verified = await asyncio.gather(
+                *[verify_candidate(c, segment_key) for c in extracted.companies]
+            )
+            found = [c for c in verified if c is not None]
+            all_companies.extend(found)
+
+            print(
+                f"[Company Ingestion] {segment_key}: "
+                f"{len(extracted.companies)} candidates, {len(found)} verified "
+                f"(from {len(results)} unique search results)"
+            )
+
+        except Exception as e:  # noqa: BLE001
+            print(f"[Company Ingestion] {segment_key} failed: {e}")
+            errors.append(f"{segment_key}: {e}")
+
+    print(f"[Company Ingestion] {len(all_companies)} raw entries before dedup.")
+
+    deduped = dedupe_companies(all_companies, state.segment_framework)
 
     print(
-        "\n[Company Ingestion] "
-        f"Validating public companies across "
-        f"{len(segments)} segments..."
+        f"[Company Ingestion] Done. {len(deduped)} unique companies "
+        f"(from {len(all_companies)} raw entries)."
     )
-
-    # Build candidates.
-    candidates: list[tuple[str, str, Segment]] = [
-        (
-            ticker,
-            name,
-            segment,
-        )
-        for ticker, (name, segment) in COMPANY_UNIVERSE.items()
-        if segment in segments
-    ]
-
-    # Validate companies concurrently.
-    validation_results = await asyncio.gather(
-        *(
-            _safe_validate_company(
-                ticker,
-                name,
-                segment,
-            )
-            for ticker, name, segment in candidates
-        )
-    )
-
-    companies: list[CompanyState] = []
-    errors: list[str] = []
-    seen: set[str] = set()
-
-    # validation_results contains ONLY:
-    # tuple[CompanyState | None, str | None]
-    for company, error in validation_results:
-        if error is not None:
-            errors.append(error)
-            continue
-
-        if company is None:
-            continue
-
-        if company.ticker in seen:
-            continue
-
-        companies.append(company)
-        seen.add(company.ticker)
-
-    # Deterministic ordering.
-    companies.sort(
-        key=lambda company: (
-            company.ai_factory_segment or "",
-            company.ticker,
-        )
-    )
-
-    print(f"[Company Ingestion] Ingested {len(companies)} eligible companies.")
-
-    if errors:
-        print(f"[Company Ingestion] {len(errors)} candidates could not be validated.")
 
     return {
-        "companies": companies,
+        "companies": deduped,
         "current_step": "company_ingestion_complete",
-        "error": (
-            None
-            if companies or not errors
-            else "No eligible companies could be validated."
-        ),
+        "error": "; ".join(errors) if errors else None,
     }

@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from graph.state import AgentState
+from graph.state import AgentState, AIFactorySegment
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Segment framework
@@ -31,8 +31,13 @@ from graph.state import AgentState
 # % share of AI Factory dollar spend per infrastructure layer.
 # Sourced from own research estimates — update quarterly as needed.
 # Read by: Company Ingestion (search targeting), Ranking (segment context).
+#
+# Typed with AIFactorySegment (from graph.state) so this dict's keys are
+# validated against the same Literal type used everywhere else in the
+# pipeline — a typo here (e.g. "compue") would be caught by the type
+# checker instead of silently propagating as an unrecognized segment.
 # ─────────────────────────────────────────────────────────────────────────────
-AI_FACTORY_SEGMENTS = {
+AI_FACTORY_SEGMENTS: dict[AIFactorySegment, dict[str, Any]] = {
     "compute": {
         "weight_pct": 58,
         "description": "GPUs, AI servers",
@@ -78,7 +83,6 @@ async def market_mapping_node(state: AgentState) -> dict[str, Any]:
         "\n[Market Mapping] Attaching AI Factory segment framework "
         f"({len(AI_FACTORY_SEGMENTS)} segments)..."
     )
-
     return {
         "segment_framework": AI_FACTORY_SEGMENTS,
         "current_step": "market_mapping_complete",
