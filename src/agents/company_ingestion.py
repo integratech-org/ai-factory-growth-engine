@@ -22,6 +22,12 @@ from typing import Any, cast
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_groq import ChatGroq
 from pydantic import BaseModel, Field
+from tenacity import (
+    retry,
+    retry_if_exception_message,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 from graph.state import AgentState, AIFactorySegment, CompanyState
 from tools.financial import get_company_profile
@@ -106,6 +112,27 @@ class CompanyCandidateList(BaseModel):
     companies: list[CompanyCandidate] = Field(
         description="List of public companies found relevant to this segment"
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Extraction retry wrapper
+#
+# Groq's forced tool-calling (via with_structured_output) occasionally
+# fails non-deterministically — the model responds with plain text
+# instead of calling the tool, or a 429 rate limit hits mid-run. Both
+# are usually transient, so retry with exponential backoff rather than
+# letting one bad segment eat the whole run.
+# ─────────────────────────────────────────────────────────────────────────────
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=2, min=2, max=30),
+    retry=retry_if_exception_message(
+        match=".*(did not call a tool|rate_limit_exceeded).*"
+    ),
+    reraise=True,
+)
+async def _extract_with_retry(chain, payload: dict) -> CompanyCandidateList:
+    return cast(CompanyCandidateList, await chain.ainvoke(payload))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -284,7 +311,7 @@ async def company_ingestion_node(state: AgentState) -> dict[str, Any]:
 
             raw_results = []
             for q in queries:
-                r = await asyncio.to_thread(tavily_search, q, max_results=10)
+                r = await asyncio.to_thread(tavily_search, q, max_results=3)
                 raw_results.extend(r)
 
             # Dedupe search results by URL before feeding to the LLM —
@@ -305,15 +332,13 @@ async def company_ingestion_node(state: AgentState) -> dict[str, Any]:
                 f"- {r['title']} ({r['content'][:300]})" for r in results
             )
 
-            extracted = cast(
-                CompanyCandidateList,
-                await chain.ainvoke(
-                    {
-                        "segment": segment_key,
-                        "description": segment_info["description"],
-                        "search_results": results_text,
-                    }
-                ),
+            extracted = await _extract_with_retry(
+                chain,
+                {
+                    "segment": segment_key,
+                    "description": segment_info["description"],
+                    "search_results": results_text,
+                },
             )
 
             verified = await asyncio.gather(
