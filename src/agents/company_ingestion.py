@@ -69,6 +69,7 @@ EXTRACTION_PROMPT = ChatPromptTemplate.from_template(
     verifiable companies as the search results actually support — target
     10-15+ per segment if the results contain that many, including mid-cap
     and smaller/niche players alongside large-cap leaders.
+
     Rules:
     1. Only include companies that are PUBLICLY TRADED with a real stock
        ticker you can identify from the search results or your own
