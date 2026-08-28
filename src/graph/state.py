@@ -45,6 +45,7 @@ class CompanyState:
 
     # ── Growth Forecast Agent ─────────────────────────────────────────
     growth_cagr_3yr: float | None = None
+    growth_narrative: str | None = None
 
     # ── Risk Adjustment Agent ─────────────────────────────────────────
     risk_discount: float | None = None
@@ -78,6 +79,7 @@ class CompanyState:
             operating_margin=data.get("operating_margin"),
             margin_score=data.get("margin_score"),
             growth_cagr_3yr=data.get("growth_cagr_3yr"),
+            growth_narrative=data.get("growth_narrative"),
             risk_discount=data.get("risk_discount"),
             risk_notes=data.get("risk_notes"),
             tafgs_score=data.get("tafgs_score"),
