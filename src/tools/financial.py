@@ -7,9 +7,6 @@ Used by: Company Ingestion, Margin Analysis (primary), Growth Forecast agents.
 
 from __future__ import annotations
 
-import asyncio
-from typing import Any
-
 import yfinance as yf
 
 
