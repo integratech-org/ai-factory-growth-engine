@@ -1,4 +1,6 @@
 """
+src/tools/search.py
+
 Tavily search wrapper.
 Used by: Company Ingestion, Moat Analysis, Growth Forecast, Risk Adjustment agents.
 """
