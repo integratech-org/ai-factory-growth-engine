@@ -22,12 +22,6 @@ from typing import Any, cast
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_groq import ChatGroq
 from pydantic import BaseModel, Field
-from tenacity import (
-    retry,
-    retry_if_exception_message,
-    stop_after_attempt,
-    wait_exponential,
-)
 
 from graph.state import AgentState, AIFactorySegment, CompanyState
 from tools.financial import get_company_profile
@@ -114,27 +108,6 @@ class CompanyCandidateList(BaseModel):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Extraction retry wrapper
-#
-# Groq's forced tool-calling (via with_structured_output) occasionally
-# fails non-deterministically — the model responds with plain text
-# instead of calling the tool, or a 429 rate limit hits mid-run. Both
-# are usually transient, so retry with exponential backoff rather than
-# letting one bad segment eat the whole run.
-# ─────────────────────────────────────────────────────────────────────────────
-@retry(
-    stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=2, min=2, max=30),
-    retry=retry_if_exception_message(
-        match=".*(did not call a tool|rate_limit_exceeded).*"
-    ),
-    reraise=True,
-)
-async def _extract_with_retry(chain, payload: dict) -> CompanyCandidateList:
-    return cast(CompanyCandidateList, await chain.ainvoke(payload))
-
-
-# ─────────────────────────────────────────────────────────────────────────────
 # LLM factory
 #
 # New instance per call rather than a module-level singleton — avoids
@@ -150,7 +123,7 @@ def build_ingestion_llm() -> ChatGroq:
     needs consistency, not creativity. Higher temperature risks the LLM
     inventing plausible-sounding but incorrect ticker symbols.
     """
-    return ChatGroq(model=MODEL_NAME, temperature=0.2)
+    return ChatGroq(model=MODEL_NAME, temperature=0.2, max_retries=5, timeout=60)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -331,13 +304,15 @@ async def company_ingestion_node(state: AgentState) -> dict[str, Any]:
                 f"- {r['title']} ({r['content'][:300]})" for r in results
             )
 
-            extracted = await _extract_with_retry(
-                chain,
-                {
-                    "segment": segment_key,
-                    "description": segment_info["description"],
-                    "search_results": results_text,
-                },
+            extracted = cast(
+                CompanyCandidateList,
+                await chain.ainvoke(
+                    {
+                        "segment": segment_key,
+                        "description": segment_info["description"],
+                        "search_results": results_text,
+                    }
+                ),
             )
 
             verified = []
