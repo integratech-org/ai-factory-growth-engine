@@ -48,8 +48,13 @@ init_state()
 
 def main():
     from src.ui.components.header import render_header
-    from src.ui.components.input_form import render_input_tickers
+    from src.ui.components.segment_overview import render_segment_overview
     from src.ui.components.weights_panel import render_weights_panel
+
+    # Safety check: Clear search_running flag if we're not in the middle of a search
+    # This handles cases where user switched tabs during search, interrupting execution
+    if "search_running" not in st.session_state:
+        st.session_state.search_running = False
 
     # Render header styling
     render_header()
@@ -66,7 +71,7 @@ def main():
             padding-top: 2rem !important;
         }
 
-        /* Style the Run Deep Search button */
+        /* Style the Run Deep Search button - adapts to light/dark mode */
         button[key="run_search_btn"] {
             height: 40px !important;
             padding: 8px 16px 8px 12px !important;
@@ -74,14 +79,12 @@ def main():
             font-weight: 500 !important;
             border: 2px solid #10b981 !important;
             border-radius: 8px !important;
-            background: white !important;
-            color: #10b981 !important;
             float: right !important;
             margin-top: -3rem !important;
         }
 
         button[key="run_search_btn"]:hover {
-            background: #ecfdf5 !important;
+            background: rgba(16, 185, 129, 0.1) !important;
         }
 
         /* Add chevron icon before text */
@@ -112,31 +115,38 @@ def main():
 
         # Button - will float to the right at title level due to CSS
         if st.button("Run Deep Search", key="run_search_btn"):
-            # Get tickers and weights from session state
-            tickers = st.session_state.get("companies", [])
-            weights = st.session_state.get(
-                "weights",
-                {
-                    "moat": 0.3,
-                    "margin": 0.2,
-                    "growth": 0.3,
-                    "risk": 0.2,
-                },
-            )
+            # Set flag FIRST and force rerun to disable buttons immediately
+            st.session_state.search_running = True
+            st.session_state.search_start_time = __import__("time").time()
+            st.rerun()
 
-            if not tickers:
-                st.error(
-                    "Please add at least one company ticker before running search."
+        # Check if we should run the search (flag is set and we're ready)
+        if st.session_state.get("search_running", False) and st.session_state.get(
+            "search_start_time"
+        ):
+            # Only run if this is a fresh search (within last 1 second)
+            import time
+
+            if time.time() - st.session_state.search_start_time < 1:
+                # Get weights from session state
+                weights = st.session_state.get(
+                    "weights",
+                    {
+                        "moat": 0.3,
+                        "margin": 0.2,
+                        "growth": 0.3,
+                        "risk": 0.2,
+                    },
                 )
-            else:
+
                 # Generate session ID
                 import uuid
 
                 session_id = str(uuid.uuid4())
                 st.session_state.session_id = session_id
 
-                # Show progress
-                with st.spinner("Running AI Factory Growth Engine pipeline..."):
+                # Run the graph
+                try:
                     import asyncio
                     import sys
 
@@ -147,32 +157,66 @@ def main():
                             asyncio.WindowsSelectorEventLoopPolicy()
                         )
 
-                    # Run the graph
-                    try:
-                        final_state = asyncio.run(
-                            run_graph(tickers, weights, session_id)
-                        )
+                    with st.spinner("Running AI Factory Growth Engine pipeline..."):
+                        final_state = asyncio.run(run_graph(weights, session_id))
 
-                        # Store results in session state
-                        st.session_state.result = final_state
-                        st.session_state.companies_data = final_state.get(
-                            "companies", []
-                        )
+                    # Store results in session state
+                    st.session_state.result = final_state
+                    st.session_state.companies_data = final_state.get("companies", [])
 
-                        st.success(
-                            f"✓ Analysis complete! Processed {len(final_state.get('companies', []))} companies."
-                        )
-                        st.rerun()
+                    # Clear flag - search complete
+                    st.session_state.search_running = False
+                    if "search_start_time" in st.session_state:
+                        del st.session_state.search_start_time
 
-                    except Exception as e:
-                        st.error(f"Error running pipeline: {str(e)}")
-                        st.exception(e)
+                    st.success(
+                        f"✓ Analysis complete! Processed {len(final_state.get('companies', []))} companies."
+                    )
+                    st.rerun()
 
-        # Main content - Input Tickers and Strategic Weights
+                except Exception as e:
+                    # Clear flag on error
+                    st.session_state.search_running = False
+                    if "search_start_time" in st.session_state:
+                        del st.session_state.search_start_time
+                    st.error(f"Error running pipeline: {str(e)}")
+                    st.exception(e)
+
+        # Auto-clear stale locks (if search was interrupted or never started)
+        import time
+
+        if st.session_state.get("search_running", False):
+            start_time = st.session_state.get("search_start_time", 0)
+            # If more than 3 seconds have passed, assume search was interrupted
+            if start_time > 0 and time.time() - start_time > 3:
+                st.session_state.search_running = False
+                if "search_start_time" in st.session_state:
+                    del st.session_state.search_start_time
+
+        # Main content - AI Factory Segments and Strategic Weights
+        # Force equal heights with CSS
+        st.markdown(
+            """
+            <style>
+            /* Force equal heights for both bordered containers */
+            div[data-testid="stVerticalBlock"]:has(div[data-testid="stVerticalBlockBorderWrapper"]) {
+                height: 100%;
+            }
+
+            div[data-testid="column"] div[data-testid="stVerticalBlockBorderWrapper"] {
+                min-height: 520px !important;
+                display: flex;
+                flex-direction: column;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+
         col1, col2 = st.columns([1, 1])
 
         with col1:
-            render_input_tickers()
+            render_segment_overview()
 
         with col2:
             weights = render_weights_panel()
@@ -359,12 +403,11 @@ def main():
 
 
 # ── Graph interaction ─────────────────────────────────────────────
-async def run_graph(tickers: list[str], weights: dict, session_id: str):
+async def run_graph(weights: dict, session_id: str):
     """
     Execute the AI Factory Growth Engine pipeline.
 
     Args:
-        tickers: List of ticker symbols to analyze
         weights: Strategic weights for TAFGS scoring
         session_id: Unique session ID for checkpointing
 
@@ -378,30 +421,45 @@ async def run_graph(tickers: list[str], weights: dict, session_id: str):
     checkpointer = None
     if DB_URI:
         try:
-            async with AsyncPostgresSaver.from_conn_string(DB_URI) as cp:
-                await cp.setup()
-                checkpointer = cp
+            # Create checkpointer and keep connection alive
+            checkpointer = AsyncPostgresSaver.from_conn_string(DB_URI)
+
+            # Setup the checkpointer (creates tables if needed)
+            async with checkpointer:
+                await checkpointer.setup()
                 print("[run_graph] PostgreSQL checkpointer initialized")
+
+                # Build graph with checkpointing
+                app = build_graph(checkpointer=checkpointer)
+
+                # Create initial state
+                state = initial_state()
+
+                # Store weights in state (no tickers needed - auto-discovered by Company Ingestion agent)
+                state["weights"] = weights
+
+                # Execute graph with checkpointing
+                config = {"configurable": {"thread_id": session_id}}
+                final_state = await app.ainvoke(state, config=config)
+
+                return final_state
+
         except Exception as e:
             print(f"[run_graph] Warning: Could not connect to PostgreSQL: {e}")
-            print(
-                "[run_graph] Running without checkpointing (state won't be persisted)"
-            )
+            print("[run_graph] Falling back to running without checkpointing")
+            checkpointer = None
 
-    # Build graph with or without checkpointing
-    app = build_graph(checkpointer=checkpointer)
+    # Fallback: Run without checkpointing if DB not available or connection failed
+    app = build_graph(checkpointer=None)
 
     # Create initial state
     state = initial_state()
 
-    # Store tickers and weights in session state for Company Ingestion to use
-    state["input_tickers"] = tickers
+    # Store weights (no tickers needed)
     state["weights"] = weights
 
-    # Execute graph
-    config = {"configurable": {"thread_id": session_id}} if checkpointer else {}
-
-    final_state = await app.ainvoke(state, config=config)
+    # Execute graph without checkpointing
+    final_state = await app.ainvoke(state, config={})
 
     return final_state
 

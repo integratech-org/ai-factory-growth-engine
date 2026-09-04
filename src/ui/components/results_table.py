@@ -69,29 +69,21 @@ def render_results_table(results: list[dict] | None = None) -> None:
                 ]
             )
 
-            # Custom CSS for table styling with green header
+            # Custom CSS for table styling with green header - adapts to light/dark mode
             st.markdown(
                 """
                 <style>
-                /* Table header styling - brand green background */
+                /* Table header styling - teal background, always white text for contrast */
                 div[data-testid="stDataFrame"] thead tr th {
                     background-color: #10b981 !important;
-                    color: white !important;
+                    color: #ffffff !important;
                     font-weight: 600 !important;
                     font-size: 0.875rem !important;
                     padding: 12px 16px !important;
                     border-bottom: 2px solid #059669 !important;
                 }
 
-                /* Table cell styling */
-                div[data-testid="stDataFrame"] tbody tr td {
-                    padding: 12px 16px !important;
-                    font-size: 0.875rem !important;
-                    color: #1f2937 !important;
-                    border-bottom: 1px solid #f3f4f6 !important;
-                }
-
-                /* Rank column - bold green */
+                /* Rank column - bold teal */
                 div[data-testid="stDataFrame"] tbody tr td:first-child {
                     font-weight: 600 !important;
                     color: #10b981 !important;
@@ -101,11 +93,6 @@ def render_results_table(results: list[dict] | None = None) -> None:
                 div[data-testid="stDataFrame"] tbody tr td:nth-child(2) {
                     color: #3b82f6 !important;
                     font-weight: 600 !important;
-                }
-
-                /* Hover effect */
-                div[data-testid="stDataFrame"] tbody tr:hover {
-                    background-color: #f9fafb !important;
                 }
 
                 /* Segment badges */

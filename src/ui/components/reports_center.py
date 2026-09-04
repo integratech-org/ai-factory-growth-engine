@@ -186,13 +186,14 @@ def render_reports_center(results: list[dict] | None = None) -> None:
                 )
 
             with col3:
-                # Copy to clipboard - show content in expandable section
-                if st.button(label="Copy to Clipboard", use_container_width=True):
-                    with st.expander(
-                        "Report Content (Click to expand and copy)", expanded=True
-                    ):
-                        st.code(report_markdown, language="markdown")
-                    st.success("Report content displayed above - select and copy")
+                # Use pyperclip alternative - streamlit clipboard
+                st.download_button(
+                    label="📋 Copy Report",
+                    data=report_markdown,
+                    file_name="ai_factory_report.md",
+                    mime="text/markdown",
+                    use_container_width=True,
+                )
 
         else:
             st.markdown(

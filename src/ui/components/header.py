@@ -14,14 +14,13 @@ def render_header() -> dict[str, bool]:
     Returns:
         dict with button click states
     """
-    # Just add minimal styling for now
+    # Just add minimal styling for now - adapts to light/dark mode
     st.markdown(
         """
         <style>
-        /* Clean header styling */
+        /* Clean header styling - adapts to theme */
         header[data-testid="stHeader"] {
-            background: white !important;
-            border-bottom: 1px solid #e5e7eb !important;
+            border-bottom: 1px solid rgba(128, 128, 128, 0.2) !important;
         }
         </style>
         """,

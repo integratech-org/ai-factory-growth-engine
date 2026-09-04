@@ -39,8 +39,8 @@ def render_sidebar() -> None:
         st.markdown(
             """
             <div style="margin-left: -0.5rem;">
-              <h1 style="margin: 0; padding: 0; font-size: 2.1rem; font-weight: 700; letter-spacing: -0.05em; color: #1d2f2d; line-height: 1;">AI Growth Engine</h1>
-              <div style="margin: 0; margin-top: 0.05rem; padding: 0; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.2em; color: #4a6b63; text-transform: uppercase; line-height: 1;">AI Factory Equity Research</div>
+              <h1 style="margin: 0; padding: 0; font-size: 2.1rem; font-weight: 700; letter-spacing: -0.05em; line-height: 1;">AI Growth Engine</h1>
+              <div style="margin: 0; margin-top: 0.05rem; padding: 0; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; line-height: 1; opacity: 0.7;">AI Factory Equity Research</div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -70,8 +70,6 @@ def _inject_styles() -> None:
            ============================================ */
 
         [data-testid="stSidebar"]:not([aria-expanded="false"]) {
-            background: #f5f6f3;
-            border-right: 1px solid #dfe7e2;
             width: 410px !important;
             min-width: 410px !important;
             max-width: 410px !important;
@@ -87,51 +85,17 @@ def _inject_styles() -> None:
             padding: 0.25rem 1.2rem 1rem 1.2rem;
         }
 
-        .brand-lockup {
-            display: flex;
-            align-items: center;
-            gap: 0.8rem;
-            margin-bottom: 0;
-            margin-left: 0.25rem;
+        /* Primary buttons in SIDEBAR ONLY - teal color */
+        [data-testid="stSidebar"] button[kind="primary"],
+        [data-testid="stSidebar"] button[data-testid="baseButton-primary"] {
+            background-color: #14B8A6 !important;
+            border-color: #14B8A6 !important;
         }
 
-        .brand-icon {
-            width: 54px;
-            height: 54px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 18px;
-            border: 2px solid #1f8c79;
-            background: rgba(31, 140, 121, 0.06);
-        }
-
-        .brand-icon svg {
-            width: 42px;
-            height: 42px;
-        }
-
-        .brand-text {
-            line-height: 1.1;
-        }
-
-        .brand-text h1 {
-            margin: 0;
-            font-size: 2.1rem;
-            font-weight: 700;
-            letter-spacing: -0.05em;
-            color: #1d2f2d;
-            line-height: 1;
-        }
-
-        .brand-text div {
-            margin-top: 0.05rem;
-            font-size: 0.72rem;
-            font-weight: 700;
-            letter-spacing: 0.2em;
-            color: #4a6b63;
-            text-transform: uppercase;
-            line-height: 1.2;
+        [data-testid="stSidebar"] button[kind="primary"]:hover,
+        [data-testid="stSidebar"] button[data-testid="baseButton-primary"]:hover {
+            background-color: #0D9488 !important;
+            border-color: #0D9488 !important;
         }
 
         .sidebar-section-label {
@@ -139,7 +103,7 @@ def _inject_styles() -> None:
             font-size: 0.75rem;
             letter-spacing: 0.15em;
             font-weight: 600;
-            color: #6b7280;
+            opacity: 0.6;
             text-transform: uppercase;
         }
         </style>
@@ -171,8 +135,9 @@ def _render_tabs() -> None:
         if st.sidebar.button(
             label,
             key=f"tab_{key}",
-            width="stretch",
+            use_container_width=True,
             type="primary" if is_active else "secondary",
+            disabled=st.session_state.get("search_running", False),
         ):
             st.session_state.active_tab = key
             st.rerun()
@@ -207,6 +172,7 @@ def _render_agents() -> None:
                 key=f"agent_btn_{key}",
                 use_container_width=True,
                 type="primary" if is_active else "secondary",
+                disabled=st.session_state.get("search_running", False),
             ):
                 st.session_state.active_tab = f"agent_{key}"
                 st.rerun()
