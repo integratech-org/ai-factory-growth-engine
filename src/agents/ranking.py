@@ -42,7 +42,9 @@ def _normalize_exposure_score(
 ) -> float:
     """Normalize AI Factory revenue exposure and weight by segment share."""
     base_exposure = (
-        company.revenue_exposure_pct if company.revenue_exposure_pct is not None else 50.0
+        company.revenue_exposure_pct
+        if company.revenue_exposure_pct is not None
+        else 50.0
     )
     base_exposure = min(100.0, max(0.0, base_exposure))
 
@@ -111,9 +113,7 @@ async def ranking_node(state: AgentState | dict[str, Any]) -> dict[str, Any]:
     else:
         segment_framework = getattr(state, "segment_framework", {})
 
-    print(
-        f"\n[Ranking Agent] Scoring and ranking {len(companies)} companies..."
-    )
+    print(f"\n[Ranking Agent] Scoring and ranking {len(companies)} companies...")
 
     # Compute TAFGS score for each company
     for company in companies:
@@ -130,9 +130,7 @@ async def ranking_node(state: AgentState | dict[str, Any]) -> dict[str, Any]:
     for index, company in enumerate(sorted_companies, start=1):
         company.rank = index
 
-    print(
-        f"[Ranking Agent] Successfully ranked {len(sorted_companies)} companies."
-    )
+    print(f"[Ranking Agent] Successfully ranked {len(sorted_companies)} companies.")
     if sorted_companies:
         top_ticker = sorted_companies[0].ticker
         top_score = sorted_companies[0].tafgs_score

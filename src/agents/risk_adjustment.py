@@ -60,8 +60,8 @@ from graph.state import AgentState, CompanyState, get_companies
 # risk), same convention as Moat Score / Operating Margin Score. The
 # composite average maps to a discount multiplier applied to TAFGS.
 # ─────────────────────────────────────────────────────────────────────────────
-MAX_DISCOUNT = 0.35          # worst case: TAFGS × 0.65
-MIN_DISCOUNT = 0.0           # best case:  TAFGS × 1.00
+MAX_DISCOUNT = 0.35  # worst case: TAFGS × 0.65
+MIN_DISCOUNT = 0.0  # best case:  TAFGS × 1.00
 
 # Relative weight of each dimension in the composite risk score.
 # Execution risk weighted highest — it's the dimension most directly
@@ -96,7 +96,9 @@ EXECUTION_FLAG_SEVERITY = {
 # ─────────────────────────────────────────────────────────────────────────────
 # Per-dimension scoring
 # ─────────────────────────────────────────────────────────────────────────────
-def _get_value(company: CompanyState | dict[str, Any], field: str, default: Any = None) -> Any:
+def _get_value(
+    company: CompanyState | dict[str, Any], field: str, default: Any = None
+) -> Any:
     if isinstance(company, CompanyState):
         return getattr(company, field, default)
     return company.get(field, default)
