@@ -19,7 +19,7 @@ def render_agent_detail(agent_key: str, agent_name: str) -> None:
 
     # Recent Executions Header
     st.markdown(
-        '<h2 style="margin: 0 0 1rem 0; font-size: 1.25rem; font-weight: 600; color: #1d2f2d;">Recent Executions</h2>',
+        '<h2 style="margin: 0 0 1rem 0; font-size: 1.25rem; font-weight: 600;">Recent Executions</h2>',
         unsafe_allow_html=True,
     )
 
@@ -28,16 +28,7 @@ def render_agent_detail(agent_key: str, agent_name: str) -> None:
     executions = _get_agent_executions(agent_key)
 
     if not executions:
-        st.markdown(
-            """
-            <div style="padding: 0.75rem 1rem; background-color: #f0f7ff; border: 1px solid #d0e4ff; border-radius: 6px; margin: 1rem 0;">
-                <p style="margin: 0; color: #1f2937; font-size: 0.875rem; line-height: 1.5;">
-                    No data available. Run deep search to view results.
-                </p>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        st.info("No data available. Run deep search to view results.")
         return
 
     # Render executions in ChatGPT-style
@@ -374,8 +365,8 @@ def _render_execution_item(execution: dict, agent_key: str) -> None:
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
                 </svg>
-                <span style="font-size: 0.875rem; color: #374151; font-weight: 600;">{agent_name}</span>
-                <span style="font-size: 0.875rem; color: #6b7280; margin-left: auto;">{session_id}</span>
+                <span style="font-size: 0.875rem; font-weight: 600; color: #000000;">{agent_name}</span>
+                <span style="font-size: 0.875rem; opacity: 0.7; margin-left: auto; color: #000000;">{session_id}</span>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2">
                     <circle cx="12" cy="12" r="10"></circle>
                     <polyline points="12 6 12 12 16 14"></polyline>
@@ -392,7 +383,7 @@ def _render_execution_item(execution: dict, agent_key: str) -> None:
                 <h3 style="margin: 0; padding: 0; font-size: 1.15rem; font-weight: 600; color: #10b981; line-height: 1.4;">
                     # {agent_name.replace(" Agent", "")} Results
                 </h3>
-                <p style="margin: 0.25rem 0 0 0; padding: 0; font-size: 0.875rem; color: #6b7280; line-height: 1.4;">
+                <p style="margin: 0.25rem 0 0 0; padding: 0; font-size: 0.875rem; opacity: 0.7; line-height: 1.4;">
                     {_get_agent_description_short(agent_key)}
                 </p>
             </div>
@@ -407,7 +398,7 @@ def _render_execution_item(execution: dict, agent_key: str) -> None:
                 <h4 style="margin: 0 0 0.5rem 0; padding: 0; font-size: 0.9rem; font-weight: 600; color: #10b981;">
                     ## Recent Execution
                 </h4>
-                <div style="font-size: 0.875rem; color: #374151; line-height: 1.6;">
+                <div style="font-size: 0.875rem; line-height: 1.6;">
                     Session: {session_id} - Completed: May 26, 2024 09:15 AM - Duration: 00:35:00
                 </div>
             </div>

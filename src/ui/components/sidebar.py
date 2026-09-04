@@ -188,7 +188,6 @@ def _render_current_run_card() -> None:
     # Get real data from session state
     session_id = st.session_state.get("session_id", None)
     companies_data = st.session_state.get("companies_data", [])
-    ticker_count = len(st.session_state.get("companies", []))  # Input tickers
     result_count = len(companies_data)  # Actual analyzed companies
     current_step = st.session_state.get("current_step", "idle")
 
@@ -227,19 +226,31 @@ def _render_current_run_card() -> None:
         st.markdown(
             f"""
             <div style="display: flex; justify-content: space-between; align-items: center; padding: 0 0 0.375rem 0; margin-top: -0.68rem;">
-                <span style="color: #6b7280; font-size: 0.8125rem; font-weight: 500;">Session</span>
-                <span style="color: #1f2937; font-weight: 600; font-size: 0.8125rem;">{session_display}</span>
+                <span style="opacity: 0.7; font-size: 0.8125rem; font-weight: 500;">Session</span>
+                <span style="font-weight: 600; font-size: 0.8125rem;">{session_display}</span>
             </div>
             """,
             unsafe_allow_html=True,
         )
 
-        # Row 2: Ticker Count (input)
+        # Row 2: Segments Count
+        # Count unique segments from companies_data
+        segments = set()
+        for company in companies_data:
+            segment = (
+                company.get("ai_factory_segment", "Unknown")
+                if isinstance(company, dict)
+                else getattr(company, "ai_factory_segment", "Unknown")
+            )
+            if segment and segment != "Unknown":
+                segments.add(segment)
+        segment_count = len(segments) if segments else 5  # Default to 5 (all segments)
+
         st.markdown(
             f"""
             <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.375rem 0;">
-                <span style="color: #6b7280; font-size: 0.8125rem; font-weight: 500;">Input Tickers</span>
-                <span style="color: #10b981; font-weight: 700; font-size: 0.9375rem;">{ticker_count}</span>
+                <span style="opacity: 0.7; font-size: 0.8125rem; font-weight: 500;">Segments Covered</span>
+                <span style="color: #10b981; font-weight: 700; font-size: 0.9375rem;">{segment_count}</span>
             </div>
             """,
             unsafe_allow_html=True,
@@ -249,7 +260,7 @@ def _render_current_run_card() -> None:
         st.markdown(
             f"""
             <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.375rem 0;">
-                <span style="color: #6b7280; font-size: 0.8125rem; font-weight: 500;">Companies Analyzed</span>
+                <span style="opacity: 0.7; font-size: 0.8125rem; font-weight: 500;">Companies Analyzed</span>
                 <span style="color: #10b981; font-weight: 700; font-size: 0.9375rem;">{result_count}</span>
             </div>
             """,
@@ -260,7 +271,7 @@ def _render_current_run_card() -> None:
         st.markdown(
             f"""
             <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.375rem 0;">
-                <span style="color: #6b7280; font-size: 0.8125rem; font-weight: 500;">Status</span>
+                <span style="opacity: 0.7; font-size: 0.8125rem; font-weight: 500;">Status</span>
                 <span style="color: {status_color}; font-weight: 700; font-size: 0.875rem;">{status}</span>
             </div>
             """,

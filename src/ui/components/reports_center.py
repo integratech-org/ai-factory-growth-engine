@@ -18,7 +18,7 @@ def render_reports_center(results: list[dict] | None = None) -> None:
     # Top 20 Company Report Table - FIRST
     st.markdown(
         """
-        <div style="font-size: 1.25rem; font-weight: 600; color: #1f2937; margin-bottom: 0.75rem;">Top 20 Company Report</div>
+        <div style="font-size: 1.25rem; font-weight: 600; margin-bottom: 0.75rem;">Top 20 Company Report</div>
         """,
         unsafe_allow_html=True,
     )
@@ -46,16 +46,7 @@ def render_reports_center(results: list[dict] | None = None) -> None:
 
             st.dataframe(df, width="stretch", hide_index=True, height=400)
         else:
-            st.markdown(
-                """
-                <div style="padding: 0.75rem 1rem; background-color: #f0f7ff; border: 1px solid #d0e4ff; border-radius: 6px; margin: 1rem 0;">
-                    <p style="margin: 0; color: #1f2937; font-size: 0.875rem; line-height: 1.5;">
-                        No data available. Run deep search to view results.
-                    </p>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+            st.info("No data available. Run deep search to view results.")
 
     st.write("")  # Spacer
 
@@ -63,7 +54,7 @@ def render_reports_center(results: list[dict] | None = None) -> None:
     with st.container(border=True):
         st.markdown(
             """
-            <div style="font-size: 1.25rem; font-weight: 600; color: #1f2937; margin-bottom: 1rem;">AI Factory Growth Report</div>
+            <div style="font-size: 1.25rem; font-weight: 600; margin-bottom: 1rem;">AI Factory Growth Report</div>
             """,
             unsafe_allow_html=True,
         )
@@ -196,16 +187,7 @@ def render_reports_center(results: list[dict] | None = None) -> None:
                 )
 
         else:
-            st.markdown(
-                """
-                <div style="padding: 0.75rem 1rem; background-color: #f0f7ff; border: 1px solid #d0e4ff; border-radius: 6px; margin: 1rem 0;">
-                    <p style="margin: 0; color: #1f2937; font-size: 0.875rem; line-height: 1.5;">
-                        No data available. Run deep search to view results.
-                    </p>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+            st.info("No data available. Run deep search to view results.")
 
         st.write("")  # Spacer
 
@@ -213,7 +195,7 @@ def render_reports_center(results: list[dict] | None = None) -> None:
         if results and key_insights_content:
             st.markdown(
                 """
-                <div style="font-size: 1.125rem; font-weight: 600; color: #1f2937; margin-bottom: 0.75rem;">Key Insights</div>
+                <div style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.75rem;">Key Insights</div>
                 """,
                 unsafe_allow_html=True,
             )
@@ -228,7 +210,7 @@ def render_reports_center(results: list[dict] | None = None) -> None:
             # Competitive Notes Section - from LangGraph Report Agent
             st.markdown(
                 """
-                <div style="font-size: 1.125rem; font-weight: 600; color: #1f2937; margin-bottom: 0.75rem;">Competitive Notes</div>
+                <div style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.75rem;">Competitive Notes</div>
                 """,
                 unsafe_allow_html=True,
             )
@@ -239,34 +221,16 @@ def render_reports_center(results: list[dict] | None = None) -> None:
                     for note in competitive_notes_content:
                         st.markdown(note)
                 else:
-                    st.markdown(
-                        """
-                        <div style="padding: 0.75rem 1rem; background-color: #f0f7ff; border: 1px solid #d0e4ff; border-radius: 6px; margin: 1rem 0;">
-                            <p style="margin: 0; color: #1f2937; font-size: 0.875rem; line-height: 1.5;">
-                                No specific risk factors identified for top companies.
-                            </p>
-                        </div>
-                        """,
-                        unsafe_allow_html=True,
-                    )
+                    st.info("No specific risk factors identified for top companies.")
 
         elif results:
             # Fallback if no parsed content available
             st.markdown(
                 """
-                <div style="font-size: 1.125rem; font-weight: 600; color: #1f2937; margin-bottom: 0.75rem;">Key Insights</div>
+                <div style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.75rem;">Key Insights</div>
                 """,
                 unsafe_allow_html=True,
             )
 
             with st.container(border=True):
-                st.markdown(
-                    """
-                    <div style="padding: 0.75rem 1rem; background-color: #f0f7ff; border: 1px solid #d0e4ff; border-radius: 6px; margin: 1rem 0;">
-                        <p style="margin: 0; color: #1f2937; font-size: 0.875rem; line-height: 1.5;">
-                            No data available. Run deep search to view results.
-                        </p>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
+                st.info("No data available. Run deep search to view results.")

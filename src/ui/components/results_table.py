@@ -31,8 +31,8 @@ def render_results_table(results: list[dict] | None = None) -> None:
                     <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path>
                 </svg>
                 <div style="flex: 1; padding: 0.1rem 0;">
-                    <div style="margin: 0; font-size: 1.25rem; font-weight: 600; color: #1f2937; line-height: 1.4;">Top 20 AI Factory Growth Ranking</div>
-                    <div style="margin: 0; margin-top: 0.1rem; font-size: 0.875rem; color: #6b7280; line-height: 1.4;">Companies ranked by Total AI Factory Growth Score (TAFGS).</div>
+                    <div style="margin: 0; font-size: 1.25rem; font-weight: 600; line-height: 1.4;">Top 20 AI Factory Growth Ranking</div>
+                    <div style="margin: 0; margin-top: 0.1rem; font-size: 0.875rem; opacity: 0.7; line-height: 1.4;">Companies ranked by Total AI Factory Growth Score (TAFGS).</div>
                 </div>
             </div>
             """,
@@ -133,13 +133,4 @@ def render_results_table(results: list[dict] | None = None) -> None:
 
         else:
             # Default placeholder - no results yet
-            st.markdown(
-                """
-                <div style="padding: 0.75rem 1rem; background-color: #f0f7ff; border: 1px solid #d0e4ff; border-radius: 6px; margin: 1rem 0;">
-                    <p style="margin: 0; color: #1f2937; font-size: 0.875rem; line-height: 1.5;">
-                        No data available. Run deep search to view results.
-                    </p>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+            st.info("No data available. Run deep search to view results.")
